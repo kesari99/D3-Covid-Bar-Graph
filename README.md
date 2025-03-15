@@ -68,15 +68,4 @@ Hover over any bar to see:
 - **Number of new cases**
 - **Number of deaths**
 
-## Code Structure
-
-```
-📂 src
- ├── 📄 App.jsx         # Main React component containing the chart logic
- ├── 📄 main.jsx        # Entry point for the React app
- ├── 📄 index.css       # Tailwind CSS styles
-📄 vite.config.js        # Vite configuration file
-📄 package.json         # Lists project dependencies and scripts
-```
-
 
