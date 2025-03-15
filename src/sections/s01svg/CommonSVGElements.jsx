@@ -3,14 +3,21 @@ import * as d3 from 'd3';
 
 export default function CovidBarChart() {
     const svgRef = useRef(null);
+    const containerRef = useRef(null);
     const [daysToShow, setDaysToShow] = useState(30);
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [containerWidth, setContainerWidth] = useState(0);
     
     const margin = { top: 40, right: 40, bottom: 80, left: 80 };
-    const width = 1200 - margin.left - margin.right;
-    const height = 600 - margin.top - margin.bottom;
+    const height = 600; 
+    const [dimensions, setDimensions] = useState({ 
+        width: 0, 
+        height: 0,
+        boundedWidth: 0,
+        boundedHeight: 0
+    });
 
     const colorScheme = {
         light: {
@@ -42,8 +49,27 @@ export default function CovidBarChart() {
     const colors = isDarkMode ? colorScheme.dark : colorScheme.light;
 
     useEffect(() => {
+        const handleResize = () => {
+            if (containerRef.current) {
+                const newWidth = containerRef.current.getBoundingClientRect().width;
+                const newHeight = Math.min(height, newWidth * 0.6);
+                setDimensions({
+                    width: newWidth,
+                    height: newHeight,
+                    boundedWidth: newWidth - margin.left - margin.right,
+                    boundedHeight: newHeight - margin.top - margin.bottom
+                });
+            }
+        };
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
         fetchAndProcessData();
-    }, [daysToShow, isDarkMode]);
+    }, [daysToShow, isDarkMode, dimensions]);
 
     const fetchAndProcessData = async () => {
         setIsLoading(true);
@@ -82,24 +108,24 @@ export default function CovidBarChart() {
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
 
-        const container = svg
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-            .append("g")
+        svg.attr("viewBox", `0 0 ${dimensions.width} ${dimensions.height}`)
+           .attr("preserveAspectRatio", "xMinYMin meet");
+
+        const container = svg.append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
         const xScale = d3.scaleTime()
             .domain(d3.extent(recentData, d => d.date))
-            .range([0, width]);
+            .range([0, dimensions.boundedWidth]);
 
         const yScale = d3.scaleLinear()
-            .domain([0, d3.max(recentData, d => d.positiveIncrease) * 1.1]) // Add 10% height on abive
-            .range([height, 0]);
+            .domain([0, d3.max(recentData, d => d.positiveIncrease) * 1.1])
+            .range([dimensions.boundedHeight, 0]);
 
         container.append("g")
             .attr("class", "grid")
             .call(d3.axisLeft(yScale)
-                .tickSize(-width)
+                .tickSize(-dimensions.boundedWidth)
                 .tickFormat(""))
             .attr("stroke", colors.grid)
             .attr("opacity", 0.3)
@@ -116,7 +142,7 @@ export default function CovidBarChart() {
 
         container.append("g")
             .attr("class", "x-axis")
-            .attr("transform", `translate(0,${height})`)
+            .attr("transform", `translate(0,${dimensions.boundedHeight})`)
             .call(xAxis)
             .selectAll("text")
             .attr("transform", "rotate(-45)")
@@ -140,8 +166,7 @@ export default function CovidBarChart() {
         container.select(".y-axis").selectAll("line")
             .attr("stroke", colors.axis);
 
-        const barWidth = Math.max((width / recentData.length) - 2, 2);
-
+        const barWidth = Math.max((dimensions.boundedWidth / recentData.length) - 2, 2);
         const barGroups = container.selectAll(".bar-group")
             .data(recentData)
             .enter().append("g")
@@ -152,7 +177,7 @@ export default function CovidBarChart() {
             .attr("x", d => xScale(d.date))
             .attr("y", d => yScale(d.positiveIncrease))
             .attr("width", barWidth)
-            .attr("height", d => height - yScale(d.positiveIncrease))
+            .attr("height", d => dimensions.boundedHeight - yScale(d.positiveIncrease))
             .attr("fill", colors.bar)
             .attr("rx", 2)
             .on("mouseover", function(event, d) {
@@ -200,10 +225,9 @@ export default function CovidBarChart() {
             });
 
         const showLabelThreshold = d3.max(recentData, d => d.positiveIncrease) * 0.2;
-        
         barGroups.append("text")
             .attr("class", "bar-label")
-            .filter(d => d.positiveIncrease > showLabelThreshold) 
+            .filter(d => d.positiveIncrease > showLabelThreshold)
             .attr("text-anchor", "middle")
             .attr("x", d => xScale(d.date) + barWidth / 2)
             .attr("y", d => yScale(d.positiveIncrease) - 5)
@@ -211,45 +235,8 @@ export default function CovidBarChart() {
             .style("font-size", "10px")
             .text(d => `${(d.positiveIncrease / 1000).toFixed(0)}k`);
 
-        // const zoom = d3.zoom()
-        //     .scaleExtent([1, 8])
-        //     .translateExtent([[0, 0], [width, height]])
-        //     .on("zoom", (event) => {
-        //         const newXScale = event.transform.rescaleX(xScale);
-                
-        //         // Update bars position and width
-        //         bars.attr("x", d => newXScale(d.date))
-        //             .attr("width", Math.max(barWidth / event.transform.k, 1));
-                
-        //         // Update bar labels
-        //         barGroups.selectAll(".bar-label")
-        //             .attr("x", d => newXScale(d.date) + (barWidth / event.transform.k) / 2)
-        //             .style("opacity", event.transform.k > 3 ? 1 : 0); // Show all labels when zoomed in
-                
-        //         // Update x-axis
-        //         container.select(".x-axis").call(xAxis.scale(newXScale));
-                
-        //         // Rotate labels again after zoom
-        //         container.select(".x-axis").selectAll("text")
-        //             .attr("transform", "rotate(-45)")
-        //             .style("text-anchor", "end")
-        //             .attr("dy", "0.5em")
-        //             .attr("dx", "-0.8em");
-        //     });
-
-        // svg.call(zoom)
-        //    .call(zoom.transform, d3.zoomIdentity); // Reset zoom state
-
-        svg.append("text")
-            .attr("x", margin.left)
-            .attr("y", 20)
-            .attr("text-anchor", "start")
-            .attr("fill", colors.axis)
-            .style("font-size", "12px")
-            .style("font-style", "italic")
-
         container.append("text")
-            .attr("transform", `translate(${width / 2},${height + margin.top + 30})`)
+            .attr("transform", `translate(${dimensions.boundedWidth / 2},${dimensions.boundedHeight + margin.top + 30})`)
             .style("text-anchor", "middle")
             .attr("fill", colors.axis)
             .style("font-size", "14px")
@@ -258,7 +245,7 @@ export default function CovidBarChart() {
         container.append("text")
             .attr("transform", "rotate(-90)")
             .attr("y", -margin.left + 15)
-            .attr("x", -height / 2)
+            .attr("x", -dimensions.boundedHeight / 2)
             .style("text-anchor", "middle")
             .attr("fill", colors.axis)
             .style("font-size", "14px")
@@ -307,7 +294,7 @@ export default function CovidBarChart() {
                 </div>
             </div>
 
-            <div className="relative">
+            <div className="relative" ref={containerRef}>
                 {isLoading && (
                     <div className={`absolute inset-0 flex items-center justify-center ${colors.bg} bg-opacity-75 z-10`}>
                         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -330,8 +317,7 @@ export default function CovidBarChart() {
                 
                 <svg 
                     ref={svgRef} 
-                    className="w-full max-w-full overflow-visible" 
-                    style={{ minHeight: `${height + margin.top + margin.bottom}px` }}
+                    className="w-full h-full overflow-visible"
                 ></svg>
             </div>
 
