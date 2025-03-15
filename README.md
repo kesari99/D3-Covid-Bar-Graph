@@ -13,9 +13,8 @@ This repository contains a React component that visualizes COVID-19 daily new ca
 
 ## Demo
 
-![Demo Screenshot](demo-screenshot.png)
 
-[Live Demo](#) (Include a link if available)
+[Live Demo](https://d3-covid-bar-graph.onrender.com) 
 
 ## Getting Started
 
